@@ -1,0 +1,114 @@
+import csv
+import os
+import tempfile
+
+
+class MergeSortExternal:
+
+    def __init__(self, input_file, output_file, buffer_size=1000):
+        self.input_file = input_file
+        self.output_file = output_file
+        self.buffer_size = buffer_size
+
+    def sort(self):
+        # Fase 1: Divisão
+        runs = self.divide_file()
+
+        # Fase 2: Merge Externo
+        sorted_file = self.merge_runs(runs)
+
+        # Limpar arquivos temporários
+        self.cleanup_runs(runs)
+
+        print(f"Arquivo ordenado salvo em {sorted_file}")
+
+    def divide_file(self):
+        runs = []
+        with open(self.input_file, 'r') as file:
+            buffer = []
+            while True:
+                records = list(csv.reader(file, delimiter=','))
+                if not records:
+                    break
+
+                buffer.extend(records)
+
+                if len(buffer) >= self.buffer_size:
+                    buffer = self.sort_buffer(buffer)
+                    run_file = self.write_run(buffer)
+                    runs.append(run_file)
+                    buffer = []
+
+        if buffer:
+            buffer = self.sort_buffer(buffer)
+            run_file = self.write_run(buffer)
+            runs.append(run_file)
+
+        return runs
+
+    def sort_buffer(self, buffer):
+        # Implemente aqui a ordenação do buffer (pode ser um algoritmo diferente)
+        return sorted(buffer, key=lambda x: x[0])  # Ordena pelo primeiro campo (chave)
+
+    def write_run(self, buffer):
+        _, temp_file = tempfile.mkstemp()
+        with open(temp_file, 'w', newline='') as file:
+            writer = csv.writer(file, delimiter=',')
+            writer.writerows(buffer)
+        return temp_file
+
+    def merge_runs(self, runs):
+        while len(runs) > 1:
+            merged_runs = []
+            for i in range(0, len(runs), 2):
+                if i + 1 < len(runs):
+                    merged_run = self.merge(runs[i], runs[i + 1])
+                else:
+                    merged_run = runs[i]
+                merged_runs.append(merged_run)
+
+            runs = merged_runs
+
+        sorted_file = runs[0]
+        os.rename(sorted_file, self.output_file)
+        return self.output_file
+
+    def merge(self, file1, file2):
+        _, temp_file = tempfile.mkstemp()
+        with open(file1, 'r') as f1, open(file2, 'r') as f2, open(temp_file, 'w', newline='') as output:
+            reader1 = csv.reader(f1, delimiter=',')
+            reader2 = csv.reader(f2, delimiter=',')
+            writer = csv.writer(output, delimiter=',')
+
+            row1 = next(reader1, None)
+            row2 = next(reader2, None)
+
+            while row1 is not None and row2 is not None:
+                if row1 < row2:
+                    writer.writerow(row1)
+                    row1 = next(reader1, None)
+                else:
+                    writer.writerow(row2)
+                    row2 = next(reader2, None)
+
+            while row1 is not None:
+                writer.writerow(row1)
+                row1 = next(reader1, None)
+
+            while row2 is not None:
+                writer.writerow(row2)
+                row2 = next(reader2, None)
+
+        return temp_file
+
+    def cleanup_runs(self, runs):
+        for run in runs:
+            os.remove(run)
+
+
+# Exemplo de uso
+input_file_path = 'seu_dataset.csv'
+output_file_path = 'dataset_ordenado.csv'
+
+merge_sort_external = MergeSortExternal(input_file_path, output_file_path, buffer_size=1000)
+merge_sort_external.sort()
